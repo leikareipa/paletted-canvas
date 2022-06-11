@@ -143,7 +143,7 @@ class PalettedCanvas extends HTMLCanvasElement {
             const palette = image.palette.dword;
             const pixelBuffer32bit = new Uint32Array(this.#canvasImage.data.buffer);
 
-            for (let i = 0; i < (image.width * image.height); i++) {
+            for (let i = 0; i < image.data.length; i++) {
                 pixelBuffer32bit[i] = palette[image.data[i]];
             }
         }
