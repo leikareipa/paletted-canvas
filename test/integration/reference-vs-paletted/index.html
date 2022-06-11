@@ -177,13 +177,15 @@
                 return;
 
                 function draw_rgba_image(imageData, width, height) {
+                    const pixelBuffer32bit = new Uint32Array(canvasImage.data.buffer);
                     for (let i = 0; i < (width * height); i++) {
-                        const canvasIdx = (i * 4);
-                        const imageIdx = (i * 3);
-                        canvasImage.data[canvasIdx+0] = imageData[imageIdx+0];
-                        canvasImage.data[canvasIdx+1] = imageData[imageIdx+1];
-                        canvasImage.data[canvasIdx+2] = imageData[imageIdx+2];
-                        canvasImage.data[canvasIdx+3] = 255;
+                        const idx = (i * 3);
+                        pixelBuffer32bit[i] = (
+                            (255 << 24) |
+                            (imageData[idx+2] << 16) |
+                            (imageData[idx+1] << 8) |
+                            imageData[idx+0]
+                        );
                     }
                 }
 
