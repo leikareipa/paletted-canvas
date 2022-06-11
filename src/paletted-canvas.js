@@ -25,24 +25,17 @@ class IndexedImageData {
             ){
                 throw new Error("The width and height must be numbers.");
             }
-
-            if (
-                (palette !== undefined) &&
-                !Array.isArray(palette)
-            ){
-                throw new Error("The palette must be an array.");
-            }
         }
 
         this.#width = width;
         this.#height = height;
         this.#data = data;
-        this.#palette = (palette || [new Uint8ClampedArray([0, 0, 0])]);
+        this.palette = (palette || [[0, 0, 0]]);
     }
 
     // To get the palette index at x as a triplet of 8-bit RGB values, do "palette[x]".
-    // To modify individual indices of the returned palette, do "palette[x] = new Uint8ClampedArray([x, x, x])".
-    // To replace the entire palette, do "palette = [new Uint8ClampedArray([x, x, x], new Uint8ClampedArray(...), ...]".
+    // To modify individual indices of the returned palette, do "palette[x] = [x, x, x]".
+    // To replace the entire palette, do "palette = [[x, x, x], [x, x, x], ...]".
     get palette() {
         return this.#palette;
     }
