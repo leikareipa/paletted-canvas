@@ -48,19 +48,20 @@ class IndexedImageData {
     }
 
     // Replaces the current palette with a new palette. The new palette should be an array
-    // containing 8-bit RGB triplet Uint8ClampedArray arrays; e.g. [[255, 0, 0], [0, 255, 0]]
-    // for a palette of red and green.
+    // containing 8-bit (0-255) RGB triplet arrays; e.g. [[255, 0, 0], [0, 255, 0]] for a
+    // palette of red and green.
     set palette(newPalette) {
         if (
             !Array.isArray(newPalette) ||
-            !newPalette.every(el=>el.length === 3) ||
-            !newPalette.every(el=>el instanceof Uint8ClampedArray)
+            !newPalette.every(el=>el.length === 3)
         ){
-            throw new Error("All palette indices must be three-element Uint8ClampedArray arrays.");
+            throw new Error("The palette must be an array of three-element arrays.");
         }
 
+        newPalette = newPalette.map(color=>Uint8ClampedArray.from(color));
+
         const palette = {
-            byte: structuredClone(newPalette),
+            byte: newPalette,
             dword: new Uint32Array(newPalette.map(color=>((255 << 24) | (color[2] << 16) | (color[1] << 8) | color[0]))),
         };
 
