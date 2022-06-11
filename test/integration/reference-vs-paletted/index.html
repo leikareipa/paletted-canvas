@@ -47,7 +47,7 @@
             .canvas-container::before {
                 background-color: #424242;
                 position: absolute;
-                top: 0;
+                top: 5px;
                 left: 50%;
                 padding: 10px;
                 border-bottom-left-radius: 0;
@@ -58,7 +58,7 @@
                 content: "Paletted";
                 font-style: normal;
                 color: whitesmoke;
-                font-size: 120%;
+                font-size: 115%;
             }
             .canvas-container::before {
                 content: "Reference";
@@ -149,20 +149,23 @@
                 const zipArchive = await JSZip.loadAsync(zipFileBytes);
                 const imageRGBA = await zipArchive.file(`rgba-${width}x${height}.raw`).async("uint8array");
                 const imagePaletted = await zipArchive.file(`paletted-${width}x${height}.raw`).async("uint8array");
-                const palette = await zipArchive.file(`paletted-${width}x${height}.palette`).async("uint8array");
+                const flatPalette = await zipArchive.file(`paletted-${width}x${height}.palette`).async("uint8array");
 
-                // Convert the palette from a flat array to an array of RGB triplet arrays.
-                palettedCanvasImage.palette =
-                    palette.reduce((pal, el)=>{
-                        pal.at(-1).push(el);
-                        if (pal.at(-1).length == 3) {
-                            pal.push([]);
-                        }
-                        return pal;
-                    }, [[]]).filter(e=>e.length);
+                {
+                    // Convert the palette from a flat array to an array of RGB triplet arrays.
+                    const palette = flatPalette.reduce((pal, el)=>{
+                            pal.at(-1).push(el);
+                            if (pal.at(-1).length == 3) {
+                                pal.push([]);
+                            }
+                            return pal;
+                        }, [[]]).filter(e=>e.length).map(el=>new Uint8ClampedArray(el));
+
+                    palettedCanvasImage.setPaletteData(palette);
+                }
 
                 initMessage.remove();
-
+                
                 let time = performance.now();
                 draw_rgba_image(imageRGBA, width, height);
                 console.log("Reference raster:", performance.now() - time);
