@@ -34,40 +34,48 @@ class IndexedImageData {
             }
         }
 
-        this.#palette = {
-            // Each element is a triplet (RGB) of 8-bit values. E.g. [[255, 0, 0], [0, 255, 0]]
-            // for a palette of red and green.
-            byte: [],
-
-            // Each element is a 32-bit value into which four (ABGR) 8-bit values have been
-            // encoded, assuming little-endian order. E.g. [[4278190335], [4278255360]] for
-            // a palette of red and green. Alpha is always 255.
-            dWord: [],
-        };
         this.#width = width;
         this.#height = height;
         this.#data = data;
-        this.setPaletteData(palette || [[0, 0, 0]]);
+        this.#palette = (palette || [new Uint8ClampedArray([0, 0, 0])]);
+    }
+
+    // To get the palette index at x as a triplet of 8-bit RGB values, do "palette[x]".
+    // To modify individual indices of the returned palette, do "palette[x] = new Uint8ClampedArray([x, x, x])".
+    // To replace the entire palette, do "palette = [new Uint8ClampedArray([x, x, x], new Uint8ClampedArray(...), ...]".
+    get palette() {
+        return this.#palette;
     }
 
     // Replaces the current palette with a new palette. The new palette should be an array
     // containing 8-bit RGB triplet Uint8ClampedArray arrays; e.g. [[255, 0, 0], [0, 255, 0]]
     // for a palette of red and green.
-    setPaletteData(newPalette) {
+    set palette(newPalette) {
         if (
-            !Array.isArray(newPalette) &&
-            !newPalette.every(el=>el.length === 3) &&
+            !Array.isArray(newPalette) ||
+            !newPalette.every(el=>el.length === 3) ||
             !newPalette.every(el=>el instanceof Uint8ClampedArray)
         ){
             throw new Error("All palette indices must be three-element Uint8ClampedArray arrays.");
         }
 
-        this.#palette.byte = structuredClone(newPalette);
-        this.#palette.dWord = new Uint32Array(newPalette.map(color=>((255 << 24) | (color[2] << 16) | (color[1] << 8) | color[0])));
-    }
+        const palette = {
+            byte: structuredClone(newPalette),
+            dword: new Uint32Array(newPalette.map(color=>((255 << 24) | (color[2] << 16) | (color[1] << 8) | color[0]))),
+        };
 
-    get palette() {
-        return this.#palette;
+        // We use a proxy to allow "this.#palette[x] = ..." to modify individual indices even
+        // though the underlying this.#palette object doesn't have index keys.
+        this.#palette = new Proxy(palette, {
+            set: (palette, index, newValue)=>{
+                palette.byte[index] = newValue;
+                this.palette = palette.byte;
+                return true;
+            },
+            get: (palette, index)=>{
+                return (palette[index] || palette.byte[index]);
+            },
+        });
     }
 
     get data() {
@@ -132,7 +140,7 @@ class PalettedCanvas extends HTMLCanvasElement {
 
         // Convert the paletted image into a 32-bit image on the canvas.
         {
-            const palette = image.palette.dWord;
+            const palette = image.palette.dword;
             const pixelBuffer32bit = new Uint32Array(this.#canvasImage.data.buffer);
 
             for (let i = 0; i < (image.width * image.height); i++) {

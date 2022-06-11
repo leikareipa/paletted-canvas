@@ -151,18 +151,14 @@
                 const imagePaletted = await zipArchive.file(`paletted-${width}x${height}.raw`).async("uint8array");
                 const flatPalette = await zipArchive.file(`paletted-${width}x${height}.palette`).async("uint8array");
 
-                {
-                    // Convert the palette from a flat array to an array of RGB triplet arrays.
-                    const palette = flatPalette.reduce((pal, el)=>{
-                            pal.at(-1).push(el);
-                            if (pal.at(-1).length == 3) {
-                                pal.push([]);
-                            }
-                            return pal;
-                        }, [[]]).filter(e=>e.length).map(el=>new Uint8ClampedArray(el));
-
-                    palettedCanvasImage.setPaletteData(palette);
-                }
+                // Convert the palette from a flat array to an array of RGB triplet arrays.
+                palettedCanvasImage.palette = flatPalette.reduce((pal, el)=>{
+                        pal.at(-1).push(el);
+                        if (pal.at(-1).length == 3) {
+                            pal.push([]);
+                        }
+                        return pal;
+                    }, [[]]).filter(e=>e.length).map(el=>new Uint8ClampedArray(el));
 
                 initMessage.remove();
                 
