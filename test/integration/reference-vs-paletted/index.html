@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width">
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <script src="../../../src/paletted-canvas.js"></script>
+        <script src="jszip.min.js"></script>
+        <style>
+            body {
+                background-color: black;
+                color: whitesmoke;
+                text-align: center;
+                font-family: "Arial", sans-serif;
+            }
+            .test-container {
+                height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+            }
+            .test-container::before {
+                text-transform: capitalize;
+                content: attr(data-title); 
+                background-color: #424242;
+                position: absolute;
+                top: 0;
+                left: 50%;
+                padding: 10px;
+                border-bottom-left-radius: 0;
+                transform: translateX(-50%);
+                border-radius: 4px;
+                color: lightgray;
+            }
+            .test-container .init-message {
+                position: absolute;
+                color: gray;
+                padding: 10px;
+                border: 1px solid gray;
+                border-radius: 4px;
+            }
+            .canvas-container {
+                width: 42%;
+                display: inline-block;
+                position: relative;
+            }
+            .canvas-container::before {
+                background-color: #424242;
+                position: absolute;
+                top: 0;
+                left: 50%;
+                padding: 10px;
+                border-bottom-left-radius: 0;
+                transform: translateX(-50%);
+                border-radius: 4px;
+            }
+            .canvas-container.paletted::before {
+                content: "Paletted";
+                font-style: normal;
+                color: whitesmoke;
+                font-size: 120%;
+            }
+            .canvas-container::before {
+                content: "Reference";
+                color: lightgray;
+            }
+            canvas {
+                width: 100%;
+                pointer-events: none;
+            }
+        </style>
+    </head>
+    <body>
+        <script>
+            const tests = {
+                // Big image, with a 256-color palette on the paletted canvas.
+                "conch-256": {
+                    width: 2376,
+                    height: 2420,
+                },
+                // Big image, with a 14-color palette on the paletted canvas.
+                "conch-14": {
+                    width: 2376,
+                    height: 2420,
+                },
+                // Small image, with a 256-color palette on the paletted canvas.
+                "conch-small-256": {
+                    width: 250,
+                    height: 255,
+                },
+            };
+
+            (async()=>{
+                for (const [name, data] of Object.entries(tests)) {
+                    await test(name, data.width, data.height);
+                }
+            })();
+
+            async function test(imageBasename, width, height) {
+                console.log(`${imageBasename} ${width}x${height}`);
+
+                const canvas = document.createElement("canvas");
+                canvas.setAttribute("width", width);
+                canvas.setAttribute("height", height);
+
+                const palettedCanvas = document.createElement("canvas", {is: "paletted-canvas"});
+                palettedCanvas.setAttribute("is", "paletted-canvas");
+                palettedCanvas.setAttribute("width", width);
+                palettedCanvas.setAttribute("height", height);
+
+                const canvasContainer = document.createElement("div");
+                canvasContainer.className = "canvas-container";
+                canvasContainer.append(canvas);
+
+                const palettedCanvasContainer = document.createElement("div");
+                palettedCanvasContainer.className = "canvas-container paletted";
+                palettedCanvasContainer.append(palettedCanvas);
+
+                const testContainer = document.createElement("div");
+                testContainer.setAttribute("data-title", `${imageBasename} (${width} × ${height})`);
+                testContainer.className = "test-container";
+                testContainer.append(canvasContainer, palettedCanvasContainer);
+
+                document.body.append(testContainer);
+
+                const initMessageSpinner = ["◐", "◓", "◑", "◒"];
+                const initMessage = document.createElement("span");
+                initMessage.className = "init-message";
+                initMessage.textContent = `Initializing ${initMessageSpinner[0]}`;
+                testContainer.append(initMessage);
+                {
+                    const spinnerAnimInterval = setInterval(()=>{
+                        if (!testContainer.contains(initMessage)) {
+                            clearInterval(spinnerAnimInterval);
+                        }
+                        initMessage.textContent = initMessage.textContent.slice(0, -1);
+                        initMessageSpinner.push(initMessageSpinner.shift());
+                        initMessage.textContent += initMessageSpinner[0];
+                    }, 120);
+                }
+
+                const canvasContext = canvas.getContext("2d");
+                const canvasImage = canvasContext.createImageData(width, height);
+                const palettedCanvasContext = palettedCanvas.getContext();
+                const palettedCanvasImage = palettedCanvasContext.createImageData();
+
+                // Load the image data from the test's ZIP file.
+                const zipFileBytes = await fetch(`./${imageBasename}/${imageBasename}.zip`).then(result=>result.arrayBuffer());
+                const zipArchive = await JSZip.loadAsync(zipFileBytes);
+                const imageRGBA = await zipArchive.file(`rgba-${width}x${height}.raw`).async("uint8array");
+                const imagePaletted = await zipArchive.file(`paletted-${width}x${height}.raw`).async("uint8array");
+                const palette = await zipArchive.file(`paletted-${width}x${height}.palette`).async("uint8array");
+
+                // Convert the palette from a flat array to an array of RGB triplet arrays.
+                palettedCanvasImage.palette =
+                    palette.reduce((pal, el)=>{
+                        pal.at(-1).push(el);
+                        if (pal.at(-1).length == 3) {
+                            pal.push([]);
+                        }
+                        return pal;
+                    }, [[]]).filter(e=>e.length);
+
+                initMessage.remove();
+
+                let time = performance.now();
+                draw_rgba_image(imageRGBA, width, height);
+                console.log("Reference raster:", performance.now() - time);
+                canvasContext.putImageData(canvasImage, 0, 0);
+                console.log("Reference total:", performance.now() - time);
+
+                time = performance.now();
+                draw_paletted_image(imagePaletted, width, height);
+                console.log("Paletted raster:", performance.now() - time);
+                palettedCanvasContext.putImageData(palettedCanvasImage);
+                console.log("Paletted total:", performance.now() - time);
+
+                return;
+
+                function draw_rgba_image(imageData, width, height) {
+                    for (let i = 0; i < (width * height); i++) {
+                        const canvasIdx = (i * 4);
+                        const imageIdx = (i * 3);
+                        canvasImage.data[canvasIdx+0] = imageData[imageIdx+0];
+                        canvasImage.data[canvasIdx+1] = imageData[imageIdx+1];
+                        canvasImage.data[canvasIdx+2] = imageData[imageIdx+2];
+                        canvasImage.data[canvasIdx+3] = 255;
+                    }
+                }
+
+                function draw_paletted_image(imageData, width, height) {
+                    for (let i = 0; i < (width * height); i++) {
+                        palettedCanvasImage.data[i] = imageData[i];
+                    }
+                }
+            }
+        </script>
+    </body>
+</html>
