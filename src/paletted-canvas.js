@@ -1,7 +1,10 @@
 /*
  * 2022 Tarpeeksi Hyvae Soft
  *
- * Software: Paletted canvas
+ * Software: Paletted canvas (https://github.com/leikareipa/paletted-canvas)
+ * 
+ * This is an early in-development version of a paletted <canvas>. Future versions will add
+ * more documentation, fix bugs, etc.
  * 
  */
 
@@ -103,14 +106,22 @@ class PalettedCanvas extends HTMLCanvasElement {
     constructor() {
         super();
     }
+    
+    static get observedAttributes() {
+        return ["width", "height"];
+    }
+
+    attributeChangedCallback(name, oldValue, newValue) {
+        if ((oldValue != newValue) && ["width", "height"].includes(name)) {
+            this.#canvasContext = super.getContext("2d");
+            this.#canvasImage = this.#canvasContext.createImageData(super.width, super.height);
+        }
+    }
 
     getContext(contextType = "2d") {
         if (contextType !== "2d") {
             throw new Error(`Only the "2d" context type is supported.`);
         }
-
-        this.#canvasContext = super.getContext("2d");
-        this.#canvasImage = this.#canvasContext.getImageData(0, 0, super.width, super.height);
 
         // Emulates the interface of CanvasRenderingContext2D.
         return {
