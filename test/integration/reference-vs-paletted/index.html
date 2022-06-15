@@ -142,6 +142,7 @@
 
                 const canvasContext = canvas.getContext("2d");
                 const canvasImage = canvasContext.createImageData(width, height);
+                const canvasPixelBuffer32bit = new Uint32Array(canvasImage.data.buffer);
                 const palettedCanvasContext = palettedCanvas.getContext();
                 const palettedCanvasImage = palettedCanvasContext.createImageData();
 
@@ -153,13 +154,15 @@
                 const flatPalette = await zipArchive.file(`paletted-${width}x${height}.palette`).async("uint8array");
 
                 // Convert the palette from a flat array to an array of RGB triplet arrays.
-                palettedCanvasImage.palette = flatPalette.reduce((pal, el)=>{
+                palettedCanvasImage.setPaletteData(
+                    flatPalette.reduce((pal, el)=>{
                         pal.at(-1).push(el);
                         if (pal.at(-1).length == 3) {
                             pal.push([]);
                         }
                         return pal;
-                    }, [[]]).filter(e=>e.length);
+                    }, [[]]).filter(e=>e.length)
+                );
 
                 initMessage.remove();
                 
@@ -178,10 +181,9 @@
                 return;
 
                 function draw_rgba_image(imageData, width, height) {
-                    const pixelBuffer32bit = new Uint32Array(canvasImage.data.buffer);
                     for (let i = 0; i < (width * height); i++) {
                         const idx = (i * 3);
-                        pixelBuffer32bit[i] = (
+                        canvasPixelBuffer32bit[i] = (
                             (255 << 24) |
                             (imageData[idx+2] << 16) |
                             (imageData[idx+1] << 8) |
@@ -192,7 +194,7 @@
 
                 function draw_paletted_image(imageData, width, height) {
                     for (let i = 0; i < (width * height); i++) {
-                        palettedCanvasImage.data[i] = imageData[i];
+                        palettedCanvasImage.data[i] = palettedCanvasImage.palette[imageData[i]];
                     }
                 }
             }
