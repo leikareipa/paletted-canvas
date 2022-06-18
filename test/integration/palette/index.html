@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width">
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <script src="../../../src/paletted-canvas.js"></script>
+    </head>
+    <body>
+        <script>
+            function assert(condition) {
+                if (!condition) {
+                    console.log("The test has terminated due to an error.");
+                    throw new Error("Assertion failed.");
+                }
+            }
+            
+            const referencePalette = [];
+
+            // NOTE: The maximum palette size this test can accept is 65536, which is further limited by
+            // the maximum width of the <canvas> element in the browser.
+            const maxPaletteSize = 5000;
+
+            console.log(`Testing with palette sizes in the range [1, ${maxPaletteSize}].`);
+
+            // Fill an indexed canvas with pixels from an n-sized palette, and assert along the way that
+            // the palette was correctly applied.
+            for (let n = 0; n < maxPaletteSize; n++) {
+                if (n % 1000 === 0) {
+                    console.log(`${Math.ceil(100 * (n / maxPaletteSize))}%`);
+                }
+
+                // The red component counts up in the range 1-255, the green component counts the
+                // number of times the red component has wrapped around, the blue component is the
+                // inverse of the red component, and the alpha component is fixed at 255.
+                referencePalette.push([(n % 256), ~~(n / 256), (255 - (n % 256)), 255]);
+
+                const canvasEl = document.createElement("canvas", {is: "paletted-canvas"});
+                assert(canvasEl);
+                canvasEl.setAttribute("width", (n + 1));
+                canvasEl.setAttribute("height", 1);
+                document.body.append(canvasEl);
+
+                const context = canvasEl.getContext();
+                assert(context instanceof CanvasRenderingContextIndexed);
+
+                const image = context.createImageData();
+                assert(image instanceof IndexedImageData);
+                assert(image.width === (n + 1));
+                assert(image.height === 1);
+
+                // Assert that we're able to assign a palette to an indexed image.
+                image.setPaletteData(referencePalette);
+                assert(referencePalette.length === (n + 1));
+                assert(image.palette instanceof Uint32Array);
+                assert(image.palette.length === (n + 1));
+                assert(image.palette.every(colorU32=>(typeof colorU32 === "number")));
+                assert(image.palette.every((colorU32, idx)=>{
+                    const refColorU32 = (
+                        ((referencePalette[idx][3] << 24) | 
+                         (referencePalette[idx][2] << 16) |
+                         (referencePalette[idx][1] << 8) |
+                         referencePalette[idx][0])
+                        >>> 0
+                    );
+                    return (colorU32 === refColorU32);
+                }));
+
+                for (let p = 0; p < (n + 1); p++) {
+                    image.data[p] = image.palette[p];
+                }
+
+                // Assert that we're able to extract the palette indices from an indexed image.
+                const drawnIndices = image.getIndexData();
+                assert(Array.isArray(drawnIndices));
+                assert(drawnIndices.length === image.data.length);
+                assert(drawnIndices.every((paletteIdx, pixelIdx)=>(paletteIdx === pixelIdx)));
+
+                context.putImageData(image);
+
+                // Assert that the pixels drawn onto the canvas are the same as those we specified
+                // for the indexed image.
+                const surfaceImage = context.getImageData(0, 0, image.width, image.height);
+                assert(surfaceImage instanceof ImageData);
+                for (let p = 0; p < (n + 1); p++) {
+                    const refColor = [
+                        ((image.palette[p] >> 0) & 0xff),
+                        ((image.palette[p] >> 8) & 0xff),
+                        ((image.palette[p] >> 16) & 0xff),
+                        ((image.palette[p] >> 24) & 0xff)
+                    ];
+
+                    assert(
+                        (surfaceImage.data[(p * 4) + 0] === refColor[0]) &&
+                        (surfaceImage.data[(p * 4) + 1] === refColor[1]) &&
+                        (surfaceImage.data[(p * 4) + 2] === refColor[2]) &&
+                        (surfaceImage.data[(p * 4) + 3] === refColor[3])
+                    );
+                }
+
+                canvasEl.remove();
+            }
+
+            console.log("The test has finished successfully.");
+        </script>
+    </body>
+</html>
