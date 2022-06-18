@@ -54,14 +54,16 @@ class IndexedImageData {
             throw new Error("A palette must consist of at least one color.");
         }
 
+        if (!newPalette.every(element=>Array.isArray(element))) {
+            throw new Error("Each entry in the palette must be a sub-array of color channel values.");
+        }
+
         newPalette.forEach(color=>{
             color.length = 4;
             if (typeof color[3] === "undefined") {
                 color[3] = 255;
             }
         });
-
-        newPalette = newPalette.map(color=>Uint8ClampedArray.from(color));
 
         this.#palette = new Uint32Array(newPalette.map(color=>((color[3] << 24) | (color[2] << 16) | (color[1] << 8) | color[0])));
     }
@@ -142,7 +144,7 @@ class CanvasRenderingContextIndexed {
 
     constructor(underlyingContext2D) {
         if (!(underlyingContext2D instanceof CanvasRenderingContext2D)) {
-            throw new Error("Incompatible canvas element: expected an instance of HTMLCanvasElement.");
+            throw new Error("CanvasRenderingContextIndexed requires an instance of CanvasRenderingContext2D as an argument.");
         }
 
         this.#underlyingContext2D = underlyingContext2D;
@@ -176,6 +178,11 @@ class CanvasRenderingContextIndexed {
         }
 
         return new IndexedImageData(width, height);
+    }
+
+    // Returns as an ImageData object the RGBA/8888 pixel data as displayed on the canvas.
+    getImageData() {
+        return this.#underlyingContext2D.getImageData(...arguments);
     }
 
     putImageData(indexedImage) {
