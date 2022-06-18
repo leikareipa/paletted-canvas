@@ -36,9 +36,9 @@ class IndexedImageData {
             throw new Error("This interface supports only numeric 'width' and 'height' as arguments.");
         }
 
-        this.#underlyingImageData = new ImageData(width, height);
-        this.#imageData32bit = new Uint32Array(this.#underlyingImageData.data.buffer);
         this.setPaletteData([[0, 0, 0, 0]]);
+        this.#underlyingImageData = new ImageData(width, height);
+        this.#imageData32bit = new Uint32Array(this.#underlyingImageData.data.buffer).fill(this.#palette[0]);
     }
 
     // Replaces the current palette with a new palette. The new palette should be an array
