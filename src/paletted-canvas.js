@@ -26,7 +26,7 @@ class IndexedImageData {
     // color values (in little-endian order), which have been derived from the palette. So
     // effectively each element stores a palette index but the index value encodes the color
     // data at that palette index.
-    #indexedData
+    #imageData32bit
 
     constructor(width, height) {
         if (
@@ -37,7 +37,7 @@ class IndexedImageData {
         }
 
         this.#underlyingImageData = new ImageData(width, height);
-        this.#indexedData = new Uint32Array(this.#underlyingImageData.data.buffer);
+        this.#imageData32bit = new Uint32Array(this.#underlyingImageData.data.buffer);
         this.setPaletteData([[0, 0, 0, 0]]);
     }
 
@@ -48,6 +48,10 @@ class IndexedImageData {
     setPaletteData(newPalette) {
         if (!Array.isArray(newPalette)) {
             throw new Error("The palette must be an array.");
+        }
+
+        if (newPalette.length < 1) {
+            throw new Error("A palette must consist of at least one color.");
         }
 
         newPalette.forEach(color=>{
@@ -62,16 +66,45 @@ class IndexedImageData {
         this.#palette = new Uint32Array(newPalette.map(color=>((color[3] << 24) | (color[2] << 16) | (color[1] << 8) | color[0])));
     }
 
+    // Returns as an array the palette index of each pixel in this image (as per the
+    // currently-active palette), where each element in the returned array corresponds
+    // to a pixel at that element position in the image.
+    //
+    // Unlike the data() getter, which returns 32-bit encoded color data, the array
+    // returned by this function represents the image's underlying palette indices,
+    // which are in the range [0, palette.length).
+    //
+    // For pixels whose color data is not found in the currently-active palette, the
+    // index 0 will be used.
+    getIndexData() {
+        if (!(this.#underlyingImageData instanceof ImageData)) {
+            throw new Error("Internal error: expected an instance of ImageData.");
+        }
+
+        const indexData = new Array(this.#underlyingImageData.width * this.#underlyingImageData.height);
+
+        for (let i = 0; i < indexData.length; i++) {
+            indexData[i] = Math.max(0, this.#palette.indexOf(this.#imageData32bit[i]));
+        }
+
+        return indexData;
+    }
+
     // Returns as a Uint32Array a 32-bit encoding of the 8-bit RGBA color values passed to
-    // setPaletteData(), where each element corresponds to each original RGBA quadruplet.
+    // setPaletteData(), where each element corresponds to each original RGBA/8888 quadruplet.
     get palette() {
         return this.#palette;
     }
 
-    // Returns as a Uint32Array array the image's current pixel buffer, where each element
-    // represents a value in the palette as returned from the 'palette' getter.
+    // Returns as a Uint32Array the image's current pixel buffer, in which each element
+    // represents an RGBA/8888 color value encoded (shifted) into a 32-bit unsigned integer
+    // in little-endian order.
     //
-    // To write new pixel data into this buffer, do it something like this:
+    // NOTE: This array doesn't hold raw palette indices (in the range [0, palette.length))
+    // but instead the actual color values from an index in the palette. To get the underlying
+    // palette indices, call getIndexData().
+    //
+    // To write pixel data into the buffer, do it something like this:
     //
     //   const image = new IndexedImageData(...);
     //   image.setPaletteData(...);
@@ -80,7 +113,7 @@ class IndexedImageData {
     //   image.data[0] = image.palette[5];
     //
     get data() {
-        return this.#indexedData;
+        return this.#imageData32bit;
     }
 
     get underlyingImageData() {
@@ -118,7 +151,9 @@ class CanvasRenderingContextIndexed {
 
         if (
             isNaN(this.#width) ||
-            isNaN(this.#height)
+            isNaN(this.#height) ||
+            (this.#height < 1) ||
+            (this.#width < 1)
         ){
             throw new Error("Invalid context resolution.");
         }
