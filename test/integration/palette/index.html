@@ -49,31 +49,16 @@
                 assert(image.height === 1);
 
                 // Assert that we're able to assign a palette to an indexed image.
-                image.setPaletteData(referencePalette);
                 assert(referencePalette.length === (n + 1));
-                assert(image.palette instanceof Uint32Array);
+                image.palette = referencePalette;
+                assert(typeof image.palette === "object");
                 assert(image.palette.length === (n + 1));
-                assert(image.palette.every(colorU32=>(typeof colorU32 === "number")));
-                assert(image.palette.every((colorU32, idx)=>{
-                    const refColorU32 = (
-                        ((referencePalette[idx][3] << 24) | 
-                         (referencePalette[idx][2] << 16) |
-                         (referencePalette[idx][1] << 8) |
-                         referencePalette[idx][0])
-                        >>> 0
-                    );
-                    return (colorU32 === refColorU32);
-                }));
+                assert(image.palette.every(color=>Array.isArray(color)));
+                assert(image.palette.every((color, colorIdx)=>color.every((value, channelIdx)=>(value === referencePalette[colorIdx][channelIdx]))));
 
                 for (let p = 0; p < (n + 1); p++) {
-                    image.data[p] = image.palette[p];
+                    image.data[p] = p;
                 }
-
-                // Assert that we're able to extract the palette indices from an indexed image.
-                const drawnIndices = image.getIndexData();
-                assert(Array.isArray(drawnIndices));
-                assert(drawnIndices.length === image.data.length);
-                assert(drawnIndices.every((paletteIdx, pixelIdx)=>(paletteIdx === pixelIdx)));
 
                 context.putImageData(image);
 
@@ -82,13 +67,7 @@
                 const surfaceImage = context.getImageData(0, 0, image.width, image.height);
                 assert(surfaceImage instanceof ImageData);
                 for (let p = 0; p < (n + 1); p++) {
-                    const refColor = [
-                        ((image.palette[p] >> 0) & 0xff),
-                        ((image.palette[p] >> 8) & 0xff),
-                        ((image.palette[p] >> 16) & 0xff),
-                        ((image.palette[p] >> 24) & 0xff)
-                    ];
-
+                    const refColor = image.palette[p];
                     assert(
                         (surfaceImage.data[(p * 4) + 0] === refColor[0]) &&
                         (surfaceImage.data[(p * 4) + 1] === refColor[1]) &&

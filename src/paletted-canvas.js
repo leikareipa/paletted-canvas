@@ -14,19 +14,10 @@ if (!isRunningInWebWorker)
 {
 // A wrapper interface around ImageData for storing paletted image data.
 class IndexedImageData {
-    // The ImageData object that we're wrapping around.
-    #underlyingImageData
-
-    // The image's palette. Each element is a 32-bit unsigned integer containing the four
-    // 8-bit values (in little-endian order) of an RGBA color.
     #palette
-
-    // Corresponds to the 'data' attribute of an ImageData object. An array in which each
-    // element is to be a 32-bit unsigned integer representing the bits of four 8-bit (RGBA)
-    // color values (in little-endian order), which have been derived from the palette. So
-    // effectively each element stores a palette index but the index value encodes the color
-    // data at that palette index.
-    #imageData32bit
+    #width
+    #height
+    #imageData
 
     constructor(width, height) {
         if (
@@ -36,16 +27,26 @@ class IndexedImageData {
             throw new Error("This interface supports only numeric 'width' and 'height' as arguments.");
         }
 
-        this.setPaletteData([[0, 0, 0, 0]]);
-        this.#underlyingImageData = new ImageData(width, height);
-        this.#imageData32bit = new Uint32Array(this.#underlyingImageData.data.buffer).fill(this.#palette[0]);
+        this.#width = width;
+        this.#height = height;
+        this.#imageData = new Array(width * height);
+        this.palette = [[0, 0, 0, 0]];
+    }
+
+    // To get the palette index at x as a quadruplet of 8-bit RGBA values, do "palette[x]".
+    // To modify individual indices of the returned palette, do "palette[x] = [R, G, B, A]".
+    // To replace the entire palette, do "palette = [[R, G, B, A], [R, G, B, A], ...]".
+    // When setting palette data, the alpha (A) component is optional - if not defined, a
+    // default of 255 will be used.
+    get palette() {
+        return this.#palette;
     }
 
     // Replaces the current palette with a new palette. The new palette should be an array
     // containing 8-bit (0-255) RGBA quadruplet arrays; e.g. [[255, 0, 0, 255], [0, 255, 0, 255]]
     // for a palette of red and green (the alpha component is optional and will default to
     // 255 if not given).
-    setPaletteData(newPalette) {
+    set palette(newPalette) {
         if (!Array.isArray(newPalette)) {
             throw new Error("The palette must be an array.");
         }
@@ -65,69 +66,35 @@ class IndexedImageData {
             }
         });
 
-        this.#palette = new Uint32Array(newPalette.map(color=>((color[3] << 24) | (color[2] << 16) | (color[1] << 8) | color[0])));
+        const palette = {
+            byte: newPalette,
+            dword: new Uint32Array(newPalette.map(color=>((color[3] << 24) | (color[2] << 16) | (color[1] << 8) | color[0]))),
+        };
+
+        // We use a proxy to allow "this.#palette[x] = ..." to modify individual indices even
+        // though the underlying this.#palette object doesn't have index keys.
+        this.#palette = new Proxy(palette, {
+            set: (palette, index, newValue)=>{
+                palette.byte[index] = newValue;
+                this.palette = palette.byte;
+                return true;
+            },
+            get: (palette, index)=>{
+                return (palette[index] || palette.byte[index]);
+            },
+        });
     }
 
-    // Returns as an array the palette index of each pixel in this image (as per the
-    // currently-active palette), where each element in the returned array corresponds
-    // to a pixel at that element position in the image.
-    //
-    // Unlike the data() getter, which returns 32-bit encoded color data, the array
-    // returned by this function represents the image's underlying palette indices,
-    // which are in the range [0, palette.length).
-    //
-    // For pixels whose color data is not found in the currently-active palette, the
-    // index 0 will be used.
-    getIndexData() {
-        if (!(this.#underlyingImageData instanceof ImageData)) {
-            throw new Error("Internal error: expected an instance of ImageData.");
-        }
-
-        const indexData = new Array(this.#underlyingImageData.width * this.#underlyingImageData.height);
-
-        for (let i = 0; i < indexData.length; i++) {
-            indexData[i] = Math.max(0, this.#palette.indexOf(this.#imageData32bit[i]));
-        }
-
-        return indexData;
-    }
-
-    // Returns as a Uint32Array a 32-bit encoding of the 8-bit RGBA color values passed to
-    // setPaletteData(), where each element corresponds to each original RGBA/8888 quadruplet.
-    get palette() {
-        return this.#palette;
-    }
-
-    // Returns as a Uint32Array the image's current pixel buffer, in which each element
-    // represents an RGBA/8888 color value encoded (shifted) into a 32-bit unsigned integer
-    // in little-endian order.
-    //
-    // NOTE: This array doesn't hold raw palette indices (in the range [0, palette.length))
-    // but instead the actual color values from an index in the palette. To get the underlying
-    // palette indices, call getIndexData().
-    //
-    // To write pixel data into the buffer, do it something like this:
-    //
-    //   const image = new IndexedImageData(...);
-    //   image.setPaletteData(...);
-    //   ...
-    //   // Write the 6th color in the palette into the first pixel.
-    //   image.data[0] = image.palette[5];
-    //
     get data() {
-        return this.#imageData32bit;
-    }
-
-    get underlyingImageData() {
-        return this.#underlyingImageData;
+        return this.#imageData;
     }
 
     get width() {
-        return this.#underlyingImageData.width;
+        return this.#width;
     }
 
     get height() {
-        return this.#underlyingImageData.height;
+        return this.#height;
     }
 
     get colorSpace() {
@@ -139,6 +106,7 @@ class IndexedImageData {
 // of a <canvas> element using indexed colors.
 class CanvasRenderingContextIndexed {
     #underlyingContext2D
+    #underlyingImageData
     #width
     #height
 
@@ -150,6 +118,8 @@ class CanvasRenderingContextIndexed {
         this.#underlyingContext2D = underlyingContext2D;
         this.#width = this.#underlyingContext2D.canvas.width;
         this.#height = this.#underlyingContext2D.canvas.height;
+        this.#underlyingImageData = this.#underlyingContext2D.createImageData(this.#width, this.#height);
+        this.#underlyingImageData.data.fill(0);
 
         if (
             isNaN(this.#width) ||
@@ -182,7 +152,7 @@ class CanvasRenderingContextIndexed {
 
     // Returns as an ImageData object the RGBA/8888 pixel data as displayed on the canvas.
     getImageData() {
-        return this.#underlyingContext2D.getImageData(...arguments);
+        return this.#underlyingImageData;
     }
 
     putImageData(indexedImage) {
@@ -197,7 +167,17 @@ class CanvasRenderingContextIndexed {
             throw new Error("Mismatched image resolution: images must be the size of the canvas.");
         }
 
-        this.#underlyingContext2D.putImageData(indexedImage.underlyingImageData, 0, 0);
+        // Convert the paletted image into a 32-bit image on the canvas.
+        {
+            const palette = indexedImage.palette.dword;
+            const pixelBuffer32bit = new Uint32Array(this.#underlyingImageData.data.buffer);
+
+            for (let i = 0; i < indexedImage.data.length; i++) {
+                pixelBuffer32bit[i] = palette[indexedImage.data[i]];
+            }
+        }
+
+        this.#underlyingContext2D.putImageData(this.#underlyingImageData, 0, 0);
     }
 }
 

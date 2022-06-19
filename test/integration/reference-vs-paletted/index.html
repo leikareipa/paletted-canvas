@@ -154,15 +154,13 @@
                 const flatPalette = await zipArchive.file(`paletted-${width}x${height}.palette`).async("uint8array");
 
                 // Convert the palette from a flat array to an array of RGB triplet arrays.
-                palettedCanvasImage.setPaletteData(
-                    flatPalette.reduce((pal, el)=>{
-                        pal.at(-1).push(el);
-                        if (pal.at(-1).length == 3) {
-                            pal.push([]);
-                        }
-                        return pal;
-                    }, [[]]).filter(e=>e.length)
-                );
+                palettedCanvasImage.palette = flatPalette.reduce((pal, el)=>{
+                    pal.at(-1).push(el);
+                    if (pal.at(-1).length == 3) {
+                        pal.push([]);
+                    }
+                    return pal;
+                }, [[]]).filter(e=>e.length);
 
                 initMessage.remove();
                 
@@ -194,7 +192,7 @@
 
                 function draw_paletted_image(imageData, width, height) {
                     for (let i = 0; i < (width * height); i++) {
-                        palettedCanvasImage.data[i] = palettedCanvasImage.palette[imageData[i]];
+                        palettedCanvasImage.data[i] = imageData[i];
                     }
                 }
             }
