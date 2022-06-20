@@ -17,7 +17,7 @@ class IndexedImageData {
     #palette
     #width
     #height
-    #imageData
+    data
 
     constructor(width, height) {
         if (
@@ -29,7 +29,7 @@ class IndexedImageData {
 
         this.#width = width;
         this.#height = height;
-        this.#imageData = new Array(width * height);
+        this.data = new Array(width * height);
         this.palette = [[0, 0, 0, 0]];
     }
 
@@ -83,10 +83,6 @@ class IndexedImageData {
                 return (palette[index] || palette.byte[index]);
             },
         });
-    }
-
-    get data() {
-        return this.#imageData;
     }
 
     get width() {
